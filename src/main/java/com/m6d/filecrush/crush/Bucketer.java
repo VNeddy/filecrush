@@ -25,6 +25,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import org.apache.hadoop.fs.FileStatus;
 
 /**
@@ -50,283 +53,291 @@ import org.apache.hadoop.fs.FileStatus;
  * </ol>
  */
 class Bucketer {
-	/**
-	 * The maximum number of buckets to create.
-	 */
-	private final int maxBuckets;
+    /**
+     * The maximum number of buckets to create.
+     */
+    private final int maxBuckets;
 
-	/**
-	 * The size of the files to create. Used in the bucketing algorithm.
-	 */
-	private final long bucketSize;
+    /**
+     * The size of the files to create. Used in the bucketing algorithm.
+     */
+    private final long bucketSize;
 
-	/**
-	 * The items to consider for bucketing.
-	 */
-	private final List<HasSize> items = new LinkedList<HasSize>();
+    /**
+     * The items to consider for bucketing.
+     */
+    private final List<HasSize> items = new LinkedList<HasSize>();
 
-	/**
-	 * The total number of bytes represented by the files in {@link #items}.
-	 */
-	private long size;
+    /**
+     * The total number of bytes represented by the files in {@link #items}.
+     */
+    private long size;
 
-	/**
-	 * The directory being bucketed.
-	 */
-	private String dir;
+    /**
+     * The directory being bucketed.
+     */
+    private String dir;
 
-	/**
-	 * Do not return buckets containing a single item from {@link #createBuckets()}.
-	 */
-	private final boolean excludeSingleItemBuckets;
+    /**
+     * Do not return buckets containing a single item from {@link #createBuckets()}.
+     */
+    private final boolean excludeSingleItemBuckets;
 
-	public Bucketer(int numBuckets, boolean excludeSingleItemBuckets) {
-		this(numBuckets, 0, excludeSingleItemBuckets);
-	}
+    public Bucketer(int numBuckets, boolean excludeSingleItemBuckets) {
+        this(numBuckets, 0, excludeSingleItemBuckets);
+    }
 
-	public Bucketer(int maxBuckets, long bucketSize, boolean excludeSingleItemBuckets) {
-		super();
+    public Bucketer(int maxBuckets, long bucketSize, boolean excludeSingleItemBuckets) {
+        super();
 
-		if (1 > maxBuckets) {
-			throw new IllegalArgumentException("Must have at least one bucket: " + maxBuckets);
-		}
+        if (1 > maxBuckets) {
+            throw new IllegalArgumentException("Must have at least one bucket: " + maxBuckets);
+        }
 
-		this.maxBuckets = maxBuckets;
+        this.maxBuckets = maxBuckets;
 
-		if (0 > bucketSize) {
-			throw new IllegalArgumentException("Bucket size must be zero or positive: " + bucketSize);
-		}
+        if (0 > bucketSize) {
+            throw new IllegalArgumentException("Bucket size must be zero or positive: " + bucketSize);
+        }
 
-		this.bucketSize = bucketSize;
-		this.excludeSingleItemBuckets = excludeSingleItemBuckets;
-	}
+        this.bucketSize = bucketSize;
+        this.excludeSingleItemBuckets = excludeSingleItemBuckets;
+    }
 
-	/**
-	 * Returns map from bucket to files that are in that bucket. Buckets are guaranteed to contain more than one file and will be
-	 * approximately the same size in bytes (summing the sizes of all the files in that bucket). After this method returns,
-	 * {@link #reset(String)} must be called before this instance can be called again.
-	 */
-	public List<Bucket> createBuckets() {
-		if (null == dir) {
-			throw new IllegalStateException("No directory set");
-		}
+    /**
+     * Returns map from bucket to files that are in that bucket. Buckets are guaranteed to contain more than one file and will be
+     * approximately the same size in bytes (summing the sizes of all the files in that bucket). After this method returns,
+     * {@link #reset(String)} must be called before this instance can be called again.
+     */
+    public List<Bucket> createBuckets() {
+        if (null == dir) {
+            throw new IllegalStateException("No directory set");
+        }
 
-		/*
-		 * Sort the files in order of descending size.
-		 */
-		Collections.sort(items, DESCENDING_SIZE);
+        /*
+         * Sort the files in order of descending size.
+         */
+        Collections.sort(items, DESCENDING_SIZE);
 
-		LinkedList<Bucket> buckets = new LinkedList<Bucketer.Bucket>();
+        LinkedList<Bucket> buckets = new LinkedList<Bucketer.Bucket>();
 
-		for (long remaining = size; remaining > 0 && buckets.size() < maxBuckets; remaining -= bucketSize) {
-			buckets.add(new Bucket(format("%s-%d", dir, buckets.size())));
-		}
+        for (long remaining = size; remaining > 0 && buckets.size() < maxBuckets; remaining -= bucketSize) {
+            buckets.add(new Bucket(format("%s-%d", dir, buckets.size())));
+        }
 
-		int numBuckets = buckets.size();
+        int numBuckets = buckets.size();
+LOG.info("[" + dir + "] NUM OF BUCKETS: " + buckets.size());
+LOG.info("[" + dir + "] NUM OF ITEMS: " + items.size());
 
-		if (1 == numBuckets) {
-			Bucket bucket = buckets.getFirst();
+        if (1 == numBuckets) {
+            Bucket bucket = buckets.getFirst();
 
-			for (HasSize file : items) {
-				bucket.add(file);
-			}
-		} else {
-			/*
-			 * Add the files to the smallest bucket.
-			 */
-			for (HasSize item : items) {
-				ListIterator<Bucket> iterator = buckets.listIterator();
+            for (HasSize file : items) {
+                bucket.add(file);
+            }
+        } else {
+            /*
+             * Add the files to the fullest bucket.
+             */
+            for (HasSize item : items) {
+LOG.info("[" + dir + "] ITEM: " + item.id() + " (" + item.size() + ")");
+                ListIterator<Bucket> iterator = buckets.listIterator();
 
-				Bucket bucket = iterator.next();
-				bucket.add(item);
+                Bucket bucket = iterator.next();
+                bucket.add(item);
+LOG.info("   ADDING TO BUCKET: " + bucket.id());
 
-				iterator.remove();
+                iterator.remove();
 
-				/*
-				 * Reposition the bucket in the list to preserve order by ascending bucket size.
-				 */
-				while (buckets.size() < numBuckets && iterator.hasNext()) {
-					Bucket other = iterator.next();
+                /*
+                 * Reposition the bucket in the list to preserve order by ascending free space.
+                 */
+                while (buckets.size() < numBuckets && iterator.hasNext()) {
+                    Bucket other = iterator.next();
 
-					if (other.bytes > bucket.bytes) {
-							iterator.previous();
-							iterator.add(bucket);
-					}
-				}
+                    if (other.bytes > bucket.bytes) {
+                            iterator.previous();
+                            iterator.add(bucket);
+                    }
+                }
 
-				if (buckets.size() < numBuckets) {
-					/*
-					 * This bucket is now the biggest one.
-					 */
-					buckets.add(bucket);
-				}
-			}
-		}
+                if (buckets.size() < numBuckets) {
+                    /*
+                     * This bucket is now the biggest one.
+                     */
+                    buckets.add(bucket);
+                }
+            }
+        }
 
-		if (excludeSingleItemBuckets) {
-			for (Iterator<Bucket> iter = buckets.iterator(); iter.hasNext(); ) {
-				Bucket bucket = iter.next();
+        if (excludeSingleItemBuckets) {
+            for (Iterator<Bucket> iter = buckets.iterator(); iter.hasNext(); ) {
+                Bucket bucket = iter.next();
 
-				if (bucket.contents.size() < 2) {
-					iter.remove();
-				}
-			}
-		}
+                if (bucket.contents.size() < 2) {
+                    iter.remove();
+                }
+            }
+        }
 
-		/*
-		 * Empty the state for the next invocation of reset.
-		 */
-		dir = null;
-		items.clear();
-		size = 0;
+        /*
+         * Empty the state for the next invocation of reset.
+         */
+        dir = null;
+        items.clear();
+        size = 0;
 
-		return buckets;
-	}
+        return buckets;
+    }
 
-	/**
-	 * Add an item for consideration. If the item has zero size, then it is ignored.
-	 */
-	public void add(HasSize item) {
-		if (null == dir) {
-			throw new IllegalStateException("No directory set");
-		}
+    /**
+     * Add an item for consideration. If the item has zero size, then it is ignored.
+     */
+    public void add(HasSize item) {
+        if (null == dir) {
+            throw new IllegalStateException("No directory set");
+        }
 
-		long itemSize = item.size();
+        long itemSize = item.size();
 
-		if (0 != itemSize) {
-			items.add(item);
-			size += itemSize;
-		}
-	}
+        if (0 != itemSize) {
+            items.add(item);
+            size += itemSize;
+        }
+    }
 
-	/**
-	 * Returns the count of items being considered.
-	 */
-	int count() {
-		return items.size();
-	}
+    /**
+     * Returns the count of items being considered.
+     */
+    int count() {
+        return items.size();
+    }
 
-	/**
-	 * Returns the total size of all the items being considered.
-	 */
-	long size() {
-		return size;
-	}
+    /**
+     * Returns the total size of all the items being considered.
+     */
+    long size() {
+        return size;
+    }
 
-	/**
-	 * Resets the instance for the directory. The given name is used to name the buckets.
-	 *
-	 * @param dir
-	 *          Directory name. Must not be null or empty.
-	 */
-	public void reset(String dir) {
-		if (dir.equals("")) {
-			throw new IllegalArgumentException("Directory is empty");
-		}
+    /**
+     * Resets the instance for the directory. The given name is used to name the buckets.
+     *
+     * @param dir
+     *          Directory name. Must not be null or empty.
+     */
+    public void reset(String dir) {
+        if (dir.equals("")) {
+            throw new IllegalArgumentException("Directory is empty");
+        }
 
-		this.dir = dir;
+        this.dir = dir;
 
-		items.clear();
-		size = 0;
-	}
+        items.clear();
+        size = 0;
+    }
 
-	String dir() {
-		return dir;
-	}
+    String dir() {
+        return dir;
+    }
 
-	public static class Bucket implements HasSize {
+    public static class Bucket implements HasSize {
 
-		private final List<String> contents;
+        private final List<String> contents;
 
-		private final String name;
+        private final String name;
 
-		private long bytes;
+        private long bytes;
 
-		public Bucket(String name) {
-			super();
+        public Bucket(String name) {
+            super();
 
-			this.name = name;
-			this.contents = new LinkedList<String>();
-		}
+            this.name = name;
+            this.contents = new LinkedList<String>();
+        }
 
-		public Bucket(String name, List<String> contents, long bytes) {
-			super();
+        public Bucket(String name, List<String> contents, long bytes) {
+            super();
 
-			this.contents = contents;
-			this.name = name;
-			this.bytes = bytes;
-		}
+            this.contents = contents;
+            this.name = name;
+            this.bytes = bytes;
+        }
 
-		private void add(HasSize hasSize) {
-			contents.add(hasSize.id());
-			bytes += hasSize.size();
-		}
+        private void add(HasSize hasSize) {
+            contents.add(hasSize.id());
+            bytes += hasSize.size();
+        }
 
-		public List<String> contents() {
-			return unmodifiableList(contents);
-		}
+        public List<String> contents() {
+            return unmodifiableList(contents);
+        }
 
-		public String name() {
-			return name;
-		}
+        public String name() {
+            return name;
+        }
 
-		public long bytes() {
-			return bytes;
-		}
+        public long bytes() {
+            return bytes;
+        }
 
-		@Override
-		public String id() {
-			return name();
-		}
+        @Override
+        public String id() {
+            return name();
+        }
 
-		@Override
-		public long size() {
-			return bytes();
-		}
+        @Override
+        public long size() {
+            return bytes();
+        }
 
-		@Override
-		public String toString() {
-			return format("%s[%s, %d, %s]", getClass().getSimpleName(), name, bytes, contents);
-		}
+        @Override
+        public String toString() {
+            return format("%s[%s, %d, %s]", getClass().getSimpleName(), name, bytes, contents);
+        }
 
-		@Override
-		public boolean equals(Object obj) {
-			if (!(obj instanceof Bucket)) {
-				return false;
-			}
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof Bucket)) {
+                return false;
+            }
 
-			Bucket other = (Bucket) obj;
+            Bucket other = (Bucket) obj;
 
-			return name.equals(other.name) && bytes == other.bytes && contents.equals(other.contents);
-		}
+            return name.equals(other.name) && bytes == other.bytes && contents.equals(other.contents);
+        }
 
-		@Override
-		public int hashCode() {
-			return name.hashCode();
-		}
-	}
+        @Override
+        public int hashCode() {
+            return name.hashCode();
+        }
+    }
 
-	private static final Comparator<HasSize> DESCENDING_SIZE = new Comparator<HasSize>() {
-		@Override
-		public int compare(HasSize o1, HasSize o2) {
-			long l1 = o1.size();
-			long l2 = o2.size();
+    private static final Comparator<HasSize> DESCENDING_SIZE = new Comparator<HasSize>() {
+        @Override
+        public int compare(HasSize o1, HasSize o2) {
+            long l1 = o1.size();
+            long l2 = o2.size();
 
-			if (l1 < l2) {
-				return 1;
-			}
+            if (l1 < l2) {
+                return 1;
+            }
 
-			if (l1 > l2) {
-				return -1;
-			}
+            if (l1 > l2) {
+                return -1;
+            }
 
-			return 0;
-		}
-	};
+            // In case of tie, uses the id to ensure this is deterministic
+            // sizes are sorted in descending order, id's in ascending order
+            return o1.id().compareTo(o2.id());
+        }
+    };
 
-	interface HasSize {
-		String id();
+    interface HasSize {
+        String id();
 
-		long size();
-	}
+        long size();
+    }
+
+    private static final Log LOG = LogFactory.getLog(Bucketer.class);
 }

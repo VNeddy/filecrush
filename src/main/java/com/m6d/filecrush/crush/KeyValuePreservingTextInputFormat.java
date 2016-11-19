@@ -38,92 +38,76 @@ import org.apache.hadoop.mapred.TextInputFormat;
 @SuppressWarnings("deprecation")
 public class KeyValuePreservingTextInputFormat extends FileInputFormat<Text, Text> {
 
-	private TextInputFormat delegate;
+    private TextInputFormat delegate;
 
-  public void configure(JobConf conf) {
-  	delegate = new TextInputFormat();
-  	delegate.configure(conf);
-  }
+    public void configure(JobConf conf) {
+        delegate = new TextInputFormat();
+        delegate.configure(conf);
+    }
 
-  @Override
-	protected boolean isSplitable(FileSystem fs, Path file) {
-  	/*
-  	 * Return false because the reducer opens the file from beginning to end.
-  	 */
-    return false;
-  }
+    @Override
+    protected boolean isSplitable(FileSystem fs, Path file) {
+    /*
+    * Return false because the reducer opens the file from beginning to end.
+    */
+        return false;
+    }
 
-  @Override
-	public RecordReader<Text, Text> getRecordReader(InputSplit genericSplit, JobConf job, Reporter reporter) throws IOException {
+    @Override
+    public RecordReader<Text, Text> getRecordReader(InputSplit genericSplit, JobConf job, Reporter reporter) throws IOException {
 
-    reporter.setStatus(genericSplit.toString());
+        reporter.setStatus(genericSplit.toString());
 
-    return new KeyValuePreservingRecordReader(new LineRecordReader(job, (FileSplit) genericSplit));
-  }
+        return new KeyValuePreservingRecordReader(new LineRecordReader(job, (FileSplit) genericSplit));
+    }
 
-  static class KeyValuePreservingRecordReader implements RecordReader<Text, Text> {
+    static class KeyValuePreservingRecordReader implements RecordReader<Text, Text> {
 
-  	private final RecordReader<LongWritable, Text> delegate;
+        private final RecordReader<LongWritable, Text> delegate;
 
-  	private final LongWritable delKey = new LongWritable();
+        private final LongWritable delKey = new LongWritable();
 
-  	private final Text delValue = new Text();
+        private final Text delValue = new Text();
 
-		public KeyValuePreservingRecordReader(RecordReader<LongWritable, Text> delegate) {
-			super();
+        public KeyValuePreservingRecordReader(RecordReader<LongWritable, Text> delegate) {
+            super();
 
-			this.delegate = delegate;
-		}
+            this.delegate = delegate;
+        }
 
-		@Override
-		public Text createKey() {
-			return new Text();
-		}
+        @Override
+        public Text createKey() {
+            return new Text();
+        }
 
-		@Override
-		public Text createValue() {
-			return delegate.createValue();
-		}
+        @Override
+        public Text createValue() {
+            return delegate.createValue();
+        }
 
-		@Override
-		public long getPos() throws IOException {
-			return delegate.getPos();
-		}
+        @Override
+        public long getPos() throws IOException {
+            return delegate.getPos();
+        }
 
-		@Override
-		public void close() throws IOException {
-			delegate.close();
-		}
+        @Override
+        public void close() throws IOException {
+            delegate.close();
+        }
 
-		@Override
-		public float getProgress() throws IOException {
-			return delegate.getProgress();
-		}
+        @Override
+        public float getProgress() throws IOException {
+            return delegate.getProgress();
+        }
 
-		@Override
-		public boolean next(Text key, Text value) throws IOException {
-			boolean next = delegate.next(delKey, delValue);
+        @Override
+        public boolean next(Text key, Text value) throws IOException {
+            boolean next = delegate.next(delKey, delValue);
 
-		key.set(delValue);
-		value.clear();
-/*
-			if (next) {
-				int first = delValue.find("\t");
+            key.clear();
+            value.set(delValue);
 
-				if (first >= 0) {
-					key.set(delValue.getBytes(), 0, first);
-
-					if (delValue.getLength() > first) {
-						value.set(delValue.getBytes(), first + 1, delValue.getLength() - first - 1);
-					} else {
-						value.clear();
-					}
-				} else {
-					key.set(delValue);
-				}
-			}
-*/
-			return next;
-		}
-  }
+            return next;
+        }
+    }
 }

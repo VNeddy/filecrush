@@ -31,68 +31,68 @@ import com.m6d.filecrush.crush.Bucketer.HasSize;
 
 public class BucketerTest {
 
-	private Bucketer bucketer;
+    private Bucketer bucketer;
 
-	@Before
-	public void before() {
-		bucketer = new Bucketer(5, 50, true);
-	}
+    @Before
+    public void before() {
+        bucketer = new Bucketer(5, 50, true);
+    }
 
-	@Test(expected = IllegalStateException.class)
-	public void callAddBeforeReset() {
-		bucketer.add(new FileStatusHasSize(new FileStatus()));
-	}
+    @Test(expected = IllegalStateException.class)
+    public void callAddBeforeReset() {
+        bucketer.add(new FileStatusHasSize(new FileStatus()));
+    }
 
-	@Test(expected = IllegalStateException.class)
-	public void callCreateBeforeReset() {
-		bucketer.createBuckets();
-	}
+    @Test(expected = IllegalStateException.class)
+    public void callCreateBeforeReset() {
+        bucketer.createBuckets();
+    }
 
-	@Test
-	public void addNullCheck() {
-		bucketer.reset("foo");
+    @Test
+    public void addNullCheck() {
+        bucketer.reset("foo");
 
-		try {
-			bucketer.add(null);
-			fail();
-		} catch (NullPointerException ok) {
-		}
-	}
+        try {
+            bucketer.add(null);
+            fail();
+        } catch (NullPointerException ok) {
+        }
+    }
 
-	@Test(expected = NullPointerException.class)
-	public void resestNullCheck() {
-		bucketer.reset(null);
-	}
+    @Test(expected = NullPointerException.class)
+    public void resestNullCheck() {
+        bucketer.reset(null);
+    }
 
-	@Test(expected = IllegalArgumentException.class)
-	public void resestEmptyCheck() {
-		bucketer.reset("");
-	}
+    @Test(expected = IllegalArgumentException.class)
+    public void resestEmptyCheck() {
+        bucketer.reset("");
+    }
 
-	@Test
-	public void nothingAdded() {
-		bucketer.reset("test");
+    @Test
+    public void nothingAdded() {
+        bucketer.reset("test");
 
-		assertThat(bucketer.createBuckets(), equalTo((Object) emptyList()));
-	}
+        assertThat(bucketer.createBuckets(), equalTo((Object) emptyList()));
+    }
 
-	@Test
-	public void addZeroSize() {
-		bucketer.reset("test");
+    @Test
+    public void addZeroSize() {
+        bucketer.reset("test");
 
-		bucketer.add(new HasSize() {
-			@Override
-			public String id() {
-				return "test";
-			}
+        bucketer.add(new HasSize() {
+            @Override
+            public String id() {
+                return "test";
+            }
 
-			@Override
-			public long size() {
-				return 0;
-			}
-		});
+            @Override
+            public long size() {
+                return 0;
+            }
+        });
 
-		assertThat(bucketer.createBuckets(), equalTo((Object) emptyList()));
-	}
+        assertThat(bucketer.createBuckets(), equalTo((Object) emptyList()));
+    }
 }
 

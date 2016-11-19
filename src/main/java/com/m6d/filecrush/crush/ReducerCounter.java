@@ -16,5 +16,5 @@
 package com.m6d.filecrush.crush;
 
 public enum ReducerCounter {
-	FILES_CRUSHED, RECORDS_CRUSHED
+    FILES_CRUSHED, RECORDS_CRUSHED
 }

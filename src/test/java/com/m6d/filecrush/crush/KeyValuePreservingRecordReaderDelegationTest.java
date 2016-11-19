@@ -38,53 +38,53 @@ import com.m6d.filecrush.crush.KeyValuePreservingTextInputFormat.KeyValuePreserv
 @RunWith(MockitoJUnitRunner.class)
 public class KeyValuePreservingRecordReaderDelegationTest {
 
-	@Mock
-	private PartialRecordReader delegate;
+    @Mock
+    private PartialRecordReader delegate;
 
-	private KeyValuePreservingRecordReader reader;
+    private KeyValuePreservingRecordReader reader;
 
-	@Before
-	public void before() {
-		reader = new KeyValuePreservingRecordReader(delegate);
-	}
+    @Before
+    public void before() {
+        reader = new KeyValuePreservingRecordReader(delegate);
+    }
 
-	@Test
-	public void createValueDelegation() {
-		reader.createValue();
+    @Test
+    public void createValueDelegation() {
+        reader.createValue();
 
-		verify(delegate).createValue();
-	}
+        verify(delegate).createValue();
+    }
 
-	@Test
-	public void getPosDelegation() throws IOException {
-		reader.getPos();
+    @Test
+    public void getPosDelegation() throws IOException {
+        reader.getPos();
 
-		verify(delegate).getPos();
-	}
+        verify(delegate).getPos();
+    }
 
-	@Test
-	public void closeDelegation() throws IOException {
-		reader.close();
+    @Test
+    public void closeDelegation() throws IOException {
+        reader.close();
 
-		verify(delegate).close();
-	}
+        verify(delegate).close();
+    }
 
-	public void createKeyDoesNotDelegate() {
-		Text key = reader.createKey();
+    public void createKeyDoesNotDelegate() {
+        Text key = reader.createKey();
 
-		assertThat(key, not(nullValue()));
-		assertThat(reader.createKey(), not(sameInstance(key)));
-	}
+        assertThat(key, not(nullValue()));
+        assertThat(reader.createKey(), not(sameInstance(key)));
+    }
 
-	public static abstract class PartialRecordReader implements RecordReader<LongWritable, Text> {
-		@Override
-		public boolean next(LongWritable key, Text value) throws IOException {
-			throw new AssertionError();
-		}
+    public static abstract class PartialRecordReader implements RecordReader<LongWritable, Text> {
+        @Override
+        public boolean next(LongWritable key, Text value) throws IOException {
+            throw new AssertionError();
+        }
 
-		@Override
-		public LongWritable createKey() {
-			throw new AssertionError();
-		}
-	}
+        @Override
+        public LongWritable createKey() {
+            throw new AssertionError();
+        }
+    }
 }
