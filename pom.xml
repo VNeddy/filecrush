@@ -125,15 +125,17 @@
             <artifactId>hadoop-mapreduce-client-core</artifactId>
             <version>${hadoop2.version}</version>
         </dependency>
+        <!--
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-test</artifactId>
             <version>${hadoop.mr1.version}</version>
         </dependency>
+        -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-minicluster</artifactId>
-            <version>${hadoop.mr1.version}</version>
+            <version>${hadoop2.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
@@ -225,6 +227,13 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-yarn-server-tests</artifactId>
+            <version>${hadoop2.version}</version>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <!--
