@@ -16,28 +16,13 @@
 
 package com.m6d.filecrush.crush.integration;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
-import static org.junit.Assert.assertThat;
-
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
+import com.m6d.filecrush.crush.Crush;
+import com.m6d.filecrush.crush.CrushReducerParameterizedTest.CustomCompressionCodec;
+import com.m6d.filecrush.crush.CrushReducerParameterizedTest.CustomWritable;
+import com.m6d.filecrush.crush.MapperCounter;
+import com.m6d.filecrush.crush.ReducerCounter;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
@@ -46,29 +31,20 @@ import org.apache.hadoop.io.SequenceFile.Writer;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.DefaultCodec;
-import org.apache.hadoop.mapred.Counters;
-import org.apache.hadoop.mapred.HadoopTestCase;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.SequenceFileInputFormat;
-import org.apache.hadoop.mapred.SequenceFileOutputFormat;
-import org.apache.hadoop.mapred.TextInputFormat;
-import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.ToolRunner;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import com.m6d.filecrush.crush.Crush;
-import com.m6d.filecrush.crush.MapperCounter;
-import com.m6d.filecrush.crush.ReducerCounter;
-import com.m6d.filecrush.crush.CrushReducerParameterizedTest.CustomCompressionCodec;
-import com.m6d.filecrush.crush.CrushReducerParameterizedTest.CustomWritable;
+import java.io.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.assertThat;
 
 
 /**
@@ -99,7 +75,7 @@ public class CrushMapReduceTest extends HadoopTestCase {
 	}
 
 	@BeforeClass
-	public static void setTmpDir() {
+	public static void setTmpDir() throws IOException {
 		try {
 			TMP.before();
 		} catch (Throwable e) {

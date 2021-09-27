@@ -15,28 +15,21 @@
  */
 package com.m6d.filecrush.crush;
 
-import static java.util.Arrays.asList;
-import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.SequenceFileInputFormat;
-import org.apache.hadoop.mapred.SequenceFileOutputFormat;
-import org.apache.hadoop.mapred.TextInputFormat;
-import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.hadoop.mapred.*;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import com.m6d.filecrush.crush.CrushReducer;
-import com.m6d.filecrush.crush.KeyValuePreservingTextInputFormat;
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+
+import static java.util.Arrays.asList;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
 public class CrushReducerTest {
@@ -49,7 +42,7 @@ public class CrushReducerTest {
 	private CrushReducer reducer;
 
 	@Before
-	public void setupReducer() {
+	public void setupReducer() throws IOException {
 		JobConf job = new JobConf(false);
 
 		job.set("mapred.tip.id", "task_201011081200_014527_r_001234");

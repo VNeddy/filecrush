@@ -52,6 +52,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
@@ -587,8 +589,10 @@ public class Crush extends Configured implements Tool {
 				inFmt = TextInputFormat.class.getName();
 			} else if ("avro".equals(inFmt)) {
 				inFmt = AvroContainerInputFormat.class.getName();
-                        } else if ("parquet".equals(inFmt)) {
-                                inFmt = MapredParquetInputFormat.class.getName();
+			} else if ("parquet".equals(inFmt)) {
+				inFmt = MapredParquetInputFormat.class.getName();
+			} else if ("orc".equals(inFmt)) {
+				inFmt = OrcInputFormat.class.getName();
 			} else {
 				try {
 					if (!FileInputFormat.class.isAssignableFrom(Class.forName(inFmt))) {
@@ -609,8 +613,10 @@ public class Crush extends Configured implements Tool {
 				outFmt = TextOutputFormat.class.getName();
 			} else if ("avro".equals(outFmt)) {
 				outFmt = AvroContainerOutputFormat.class.getName();
-                        } else if ("parquet".equals(outFmt)) {
-                                outFmt = MapredParquetOutputFormat.class.getName();
+			} else if ("parquet".equals(outFmt)) {
+				outFmt = MapredParquetOutputFormat.class.getName();
+			} else if ("orc".equals(outFmt)) {
+				outFmt = OrcOutputFormat.class.getName();
 			} else {
 				try {
 					if (!FileOutputFormat.class.isAssignableFrom(Class.forName(outFmt))) {
@@ -652,12 +658,14 @@ public class Crush extends Configured implements Tool {
 			job.setBoolean("mapreduce.output.fileoutputformat.compress", false);
 			job.set("avro.output.codec", "null");
 			job.set("parquet.compression", "uncompressed");
+			job.set("orc.compress", "NONE");
 		} else {
 			job.setBoolean("mapreduce.output.fileoutputformat.compress", true);
 			job.set("mapreduce.output.fileoutputformat.compress.type", "BLOCK");
 			job.set("mapreduce.output.fileoutputformat.compress.codec", codecClassName);
 			job.set("avro.output.codec", codec);
 			job.set("parquet.compression", codec);
+			job.set("orc.compress", codec);
 
 			try {
 				CompressionCodec instance = (CompressionCodec) Class.forName(codecClassName).newInstance();

@@ -28,20 +28,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
+import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.JobConfigurable;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.OutputFormat;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.RecordWriter;
-import org.apache.hadoop.mapred.Reducer;
-import org.apache.hadoop.mapred.Reporter;
-import org.apache.hadoop.mapred.TextInputFormat;
+import org.apache.hadoop.mapred.*;
 
 import org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat;
 
@@ -53,6 +46,9 @@ import org.apache.hadoop.hive.serde2.io.ParquetHiveRecord;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.ql.exec.FileSinkOperator;
+import org.apache.orc.OrcFile;
+import org.apache.orc.Reader;
+import org.apache.orc.TypeDescription;
 import parquet.schema.MessageType;
 import parquet.schema.Type;
 import parquet.hadoop.ParquetFileReader;
@@ -246,9 +242,14 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 					inputFormat = value;
 					inFormatCls = Class.forName(value);
 
-					if (!FileInputFormat.class.isAssignableFrom(inFormatCls)) {
-						throw new IllegalArgumentException(format("Not a file input format: %s=%s", key, value));
-					}
+					if (OrcInputFormat.class.isAssignableFrom(inFormatCls)) {
+                        inputFormat = "orc";
+                    }
+
+                    if (!FileInputFormat.class.isAssignableFrom(inFormatCls)
+                            && !OrcInputFormat.class.isAssignableFrom(inFormatCls)) {
+                        throw new IllegalArgumentException(format("Not a file input format: %s=%s", key, value));
+                    }
 				}
 
 				inFormatClsList.add(inFormatCls);
@@ -299,6 +300,17 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 		avroReader.close();
                 return schemaString;
         }
+    private String getOrcFileSchemaString(JobConf job, Path inputPath) throws IOException {
+        Reader reader = OrcFile.createReader(inputPath, new OrcFile.ReaderOptions(job));
+        TypeDescription schema = reader.getSchema();
+        String schemaString = schema.toString();
+        return schemaString;
+    }
+
+    private ObjectInspector getOrcInspector(JobConf job, Path inputPath) throws IOException {
+        org.apache.hadoop.hive.ql.io.orc.Reader reader = org.apache.hadoop.hive.ql.io.orc.OrcFile.createReader(FileSystem.get(job), inputPath);
+        return reader.getObjectInspector();
+    }
 
 	@Override
 	public void reduce(Text bucketId, Iterator<Text> values, OutputCollector<Text, Text> collector, Reporter reporter) throws IOException {
@@ -322,15 +334,17 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 		 */
 		RecordWriter<Object, Object> sink = null;
 		FileSinkOperator.RecordWriter parquetSink = null;
-		Exception rootCause = null;
+        RecordWriter orcWriter = null;
+        OrcSerde orcSerde = new OrcSerde();
+        Exception rootCause = null;
 
 		Void voidKey = null;
 		Object key = null;
 		Object value = null;
 
-                String schemaSignature = null;
-                String columns = null;
-                String columnsTypes = null;
+		String schemaSignature = null;
+		String columns = null;
+		String columnsTypes = null;
 		Properties jobProperties = new Properties();
 		boolean firstFile = true;
 
@@ -338,7 +352,8 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 			while (null == rootCause && values.hasNext()) {
 				Text srcFile = values.next();
 				Path inputPath = new Path(srcFile.toString());
-				RecordReader<Object, Object> reader = createRecordReader(idx, inputPath, reporter);
+                RecordReader<Object, Object> reader = null;
+                reader = createRecordReader(idx, inputPath, reporter);
 
 				if (firstFile) {
 					firstFile = false;
@@ -351,8 +366,10 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 					if (AvroContainerInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
 						schemaSignature = getAvroFileSchemaString(job, inputPath);
 						job.set("avro.schema.literal", schemaSignature);
-					}
-					else if (MapredParquetInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
+					} else if (OrcInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
+                        schemaSignature = getOrcFileSchemaString(job, inputPath);
+                        // TODO
+                    } else if (MapredParquetInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
 						MessageType schema = getParquetFileSchema(job, inputPath);
 						List <Type> fieldsFromSchema = schema.getFields();
 						for (Type field : fieldsFromSchema) {
@@ -435,10 +452,13 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 					if (MapredParquetOutputFormat.class.isAssignableFrom(getOutputFormatClass(idx))) {
 						outputFormat = "parquet";
 						parquetSink = createParquetRecordWriter(idx, valueOut.toString(), jobProperties, (Class<? extends org.apache.hadoop.io.Writable>)value.getClass(), reporter);
-					} else {
-						outputFormat = getOutputFormatClass(idx).getName();
-						sink = createRecordWriter(idx, valueOut.toString());
-					}
+                    } else if (OrcOutputFormat.class.isAssignableFrom(getOutputFormatClass(idx))) {
+                        outputFormat = "orc";
+                        orcWriter = createOrcRecordWriter(idx, valueOut.toString(), reporter);
+                    } else {
+                        outputFormat = getOutputFormatClass(idx).getName();
+                        sink = createRecordWriter(idx, valueOut.toString());
+                    }
 				} else { // next files
 
 					/*
@@ -447,38 +467,48 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 					String nextSchemaSignature = null;
 					if (AvroContainerInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
 						nextSchemaSignature = getAvroFileSchemaString(job, inputPath);
-                                        } else if (MapredParquetInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
-						nextSchemaSignature = getParquetFileSchemaString(job, inputPath);
-                                        } else {
-						Object otherKey = reader.createKey();
-						if (otherKey == null)
-							otherKey = NullWritable.get();
-						nextSchemaSignature = otherKey.getClass().getName() + ":" + reader.createValue().getClass().getName();
-					}
+                    } else if (OrcInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
+                        nextSchemaSignature = getOrcFileSchemaString(job, inputPath);
+                    } else if (MapredParquetInputFormat.class.isAssignableFrom(getInputFormatClass(idx))) {
+                        nextSchemaSignature = getParquetFileSchemaString(job, inputPath);
+                    } else {
+                        Object otherKey = reader.createKey();
+                        if (otherKey == null)
+                            otherKey = NullWritable.get();
+                        nextSchemaSignature = otherKey.getClass().getName() + ":" + reader.createValue().getClass().getName();
+                    }
 					if (!schemaSignature.equals(nextSchemaSignature)) {
 						throw new IllegalArgumentException(format("Heterogeneous schema detected in file %s: [%s] != [%s]", inputPath, nextSchemaSignature, schemaSignature));
 					}
 				}
 
 				boolean ret;
-				if ("parquet".equals(outputFormat))
-					ret = reader.next(voidKey, value);
-				else
-					ret = reader.next(key, value);
+				if ("parquet".equals(outputFormat)) {
+                    ret = reader.next(voidKey, value);
+                } else if ("orc".equals(outputFormat)) {
+                    ret = reader.next(voidKey, value);
+                } else {
+                    ret = reader.next(key, value);
+                }
 				while (ret) {
-					if ("text".equals(inputFormat))
-						sink.write(key, null);
-					else
-						if (sink != null)
-							sink.write(key, value);
-						else {
-							ParquetHiveRecord parquetHiveRecord = new ParquetHiveRecord(value, (StructObjectInspector)parquetSerDe.getObjectInspector());
-							parquetSink.write(parquetHiveRecord);
-						}
+					if ("text".equals(inputFormat)) {
+                        sink.write(key, null);
+                    } else if ("orc".equals(inputFormat)) {
+                        orcWriter.write(NullWritable.get(), orcSerde.serialize(value, getOrcInspector(job, inputPath)));
+                    } else {
+                        if (sink != null)
+                            sink.write(key, value);
+                        else {
+                            ParquetHiveRecord parquetHiveRecord = new ParquetHiveRecord(value, (StructObjectInspector) parquetSerDe.getObjectInspector());
+                            parquetSink.write(parquetHiveRecord);
+                        }
+                    }
 					reporter.incrCounter(ReducerCounter.RECORDS_CRUSHED, 1);
 
 					if ("parquet".equals(outputFormat))
 						ret = reader.next(voidKey, value);
+                    else if ("orc".equals(outputFormat))
+                        ret = reader.next(voidKey, value);
 					else
 						ret = reader.next(key, value);
 				}
@@ -522,6 +552,17 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 					}
 				}
 			}
+            if (null != orcWriter) {
+                try {
+                    orcWriter.close(reporter);
+                } catch (Exception e) {
+                    if (null == rootCause) {
+                        rootCause = e;
+                    } else {
+                        LOG.error("Swallowing exception on close of " + outputFileName, e);
+                    }
+                }
+            }
 
 			/*
 			 * Let the exception bubble up with a minimum of wrapping.
@@ -567,6 +608,20 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 		}
 	}
 
+	private RecordWriter createOrcRecordWriter(int idx, String path, Reporter reporter) throws IOException {
+        Class<? extends OutputFormat<?, ?>> cls = (Class<? extends OutputFormat<?, ?>>) getOutputFormatClass(idx);
+        try {
+            OrcOutputFormat format = (OrcOutputFormat) cls.newInstance();
+            return format.getRecordWriter(FileSystem.get(job),job,path.toString(), reporter);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 	private FileSinkOperator.RecordWriter createParquetRecordWriter(int idx, String path, Properties properties, Class<? extends org.apache.hadoop.io.Writable> valueClass, Reporter reporter) throws IOException {
 		Class<? extends OutputFormat<?, ?>> cls = (Class<? extends OutputFormat<?, ?>>) getOutputFormatClass(idx);
 
@@ -592,7 +647,7 @@ public class CrushReducer extends MapReduceBase implements Reducer<Text, Text, T
 		try {
 			FileInputFormat.setInputPaths(job, inputPath);
 
-			FileInputFormat<?, ?> instance = cls.newInstance();
+			InputFormat<?, ?> instance = cls.newInstance();
 
 			if (instance instanceof JobConfigurable) {
 				((JobConfigurable) instance).configure(job);
