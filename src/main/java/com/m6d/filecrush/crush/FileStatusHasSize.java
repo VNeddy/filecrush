@@ -15,32 +15,31 @@
  */
 package com.m6d.filecrush.crush;
 
-import org.apache.hadoop.fs.FileStatus;
-
 import com.m6d.filecrush.crush.Bucketer.HasSize;
+import org.apache.hadoop.fs.FileStatus;
 
 
 class FileStatusHasSize implements HasSize {
 
-	private final FileStatus fileStatus;
+    private final FileStatus fileStatus;
 
-	public FileStatusHasSize(FileStatus fileStatus) {
-		super();
+    public FileStatusHasSize(FileStatus fileStatus) {
+        super();
 
-		if (null == fileStatus) {
-			throw new NullPointerException("File status");
-		}
+        if (null == fileStatus) {
+            throw new NullPointerException("File status");
+        }
 
-		this.fileStatus = fileStatus;
-	}
+        this.fileStatus = fileStatus;
+    }
 
-	@Override
-	public String id() {
-		return fileStatus.getPath().toUri().getPath();
-	}
+    @Override
+    public String id() {
+        return fileStatus.getPath().toUri().getPath();
+    }
 
-	@Override
-	public long size() {
-		return fileStatus.getLen();
-	}
+    @Override
+    public long size() {
+        return fileStatus.getLen();
+    }
 }

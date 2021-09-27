@@ -15,7 +15,7 @@ export AVRO_JAR=/opt/cloudera/parcels/CDH/jars/hive-exec-1.1.0-cdh5.7.2.jar
 export HADOOP_CLASSPATH=$AVRO_JAR
 export LIBJARS=/home/aarau1/filecrush/target/filecrush-2.2.2-SNAPSHOT.jar,$AVRO_JAR
 
-function get_input_table_dir {
+function get_input_table_dir() {
   local input=$1
 
   local in_tbl=t_input_$input
@@ -23,11 +23,11 @@ function get_input_table_dir {
   echo $in_dir
 }
 
-function get_output_table_dir {
+function get_output_table_dir() {
   local input=$1
   local clone_mode=$2
 
-  local in_dir=$( get_input_table_dir $input )
+  local in_dir=$(get_input_table_dir $input)
   local out_tbl=t_output_$input
   local out_dir=$OUTPUT_BASE_DIR/$out_tbl
   if [ "$clone_mode" == "yes" ]; then
@@ -38,19 +38,19 @@ function get_output_table_dir {
   echo $tbl_out_dir
 }
 
-function prepare_input {
+function prepare_input() {
   local input=$1
   local big_file=$2
-  
+
   local src_tbl=t_$input
   local dst_tbl=t_input_$input
   local dst_dir=$INPUT_BASE_DIR/$dst_tbl
   hdfs dfs -rm -R -f -skipTrash $dst_dir
   hdfs dfs -mkdir -p $dst_dir
   hdfs dfs -cp $SRC_BASE_DIR/$src_tbl/* $dst_dir/
- 
+
   local create_big_file_cmd=""
-  if [ "$big_file" == "yes" ]; then 
+  if [ "$big_file" == "yes" ]; then
     create_big_file_cmd="set mapreduce.job.reduces = 1; insert into table $dst_tbl select * from $dst_tbl sort by 1;"
   fi
 
@@ -62,7 +62,7 @@ $create_big_file_cmd
 EOF
 }
 
-function run {
+function run() {
   local compress=$1
   local max_file_blocks=$2
   local reducers=$3
@@ -101,21 +101,23 @@ function run {
     --threshold 0.007 \
     --verbose \
     $clone_option \
-    2>&1 | tee job.log && \
-  $BLINE <<EOF
+    2>&1 | tee job.log &&
+    $BLINE <<EOF
+
+  #    \
+  #    --regex '.*/input2\b.*' \
+  #    --replacement 'crushed_file-${crush.timestamp}-${crush.task.num}-${crush.file.num}' \
+  #    \
+  #    --regex '.*/input2\b.*' \
+  #    --replacement 'crushed_file-${crush.timestamp}-${crush.task.num}-${crush.file.num}' \
+  #    --input-format avro \
+  #    --output-format avro \
+  #    -libjars $LIBJARS $INPUT_BASE_DIR/input $INPUT_BASE_DIR/output 20161016000000 \
 use $DB_NAME;
 drop table if exists $out_tbl;
 create external table $out_tbl like $in_tbl location 'hdfs://$tbl_out_dir';
 EOF
-#    \
-#    --regex '.*/input2\b.*' \
-#    --replacement 'crushed_file-${crush.timestamp}-${crush.task.num}-${crush.file.num}' \
-#    \
-#    --regex '.*/input2\b.*' \
-#    --replacement 'crushed_file-${crush.timestamp}-${crush.task.num}-${crush.file.num}' \
-#    --input-format avro \
-#    --output-format avro \
-#    -libjars $LIBJARS $INPUT_BASE_DIR/input $INPUT_BASE_DIR/output 20161016000000 \
+
 }
 
 if [ $# == 0 ]; then
