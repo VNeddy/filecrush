@@ -219,8 +219,8 @@ BEFORE_STATS="$(show_stats $(get_input_dir "$DB_NAME" "$TABLE_NAME" "$PART_SPEC"
 echo "$(date) - Running the crushing job"
 crush "$DB_NAME" "$TABLE_NAME" "$PART_SPEC" "$COMPRESSION" "$THRESHOLD" "$MAX_REDUCES" "$MAX_FILE_BLOCKS"
 
-echo "$(date) - Refreshing Impala metadata"
-refresh_metadata "$DB_NAME" "$TABLE_NAME" "$PART_SPEC"
+#echo "$(date) - Refreshing Impala metadata"
+#refresh_metadata "$DB_NAME" "$TABLE_NAME" "$PART_SPEC"
 
 echo "$(date) - Gathering final stats"
 cat <<EOF
