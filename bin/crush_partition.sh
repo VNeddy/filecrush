@@ -5,7 +5,7 @@ set -o errexit
 set -o pipefail
 
 if [ $# -lt 3 -o $# -gt 5 ]; then
-  echo "Syntax: $0 <db_name> <table_name> <partition_spec> [compression] [threshold] [max_reduces]"
+  echo "Syntax: $0 <db_name> <table_name> <partition_spec> [compression] [threshold] [MAX_FILE_BLOCKS] [max_reduces]"
   exit 1
 fi
 
@@ -15,14 +15,14 @@ readonly TABLE_NAME=$2
 readonly PART_SPEC=$3
 readonly COMPRESSION=${4:-snappy}
 readonly THRESHOLD=${5:-0.5}
-readonly MAX_REDUCES=${6:-200}
+readonly MAX_FILE_BLOCKS=${6:-1}
+readonly MAX_REDUCES=${7:-200}
 
 readonly BLINE='beeline -u "'"$BEELINE_CONNECT"'"'
 #readonly IMPALA="impala-shell -i $IMPALA_HOST"
 
 readonly FILECRUSH_DIR=$(readlink -f $(dirname $0)/..)
 
-readonly MAX_FILE_BLOCKS=1
 readonly BACKUP_BASE=filecrush_backup
 
 readonly TMP_FILE=/tmp/crush_partition.tmp

@@ -463,8 +463,8 @@ public class Crush extends Configured implements Tool {
                 if (cli.hasOption("threshold")) {
                     threshold = Double.parseDouble(cli.getOptionValue("threshold"));
 
-                    if (0 >= threshold || 1 < threshold || Double.isInfinite(threshold) || Double.isNaN(threshold)) {
-                        throw new IllegalArgumentException("Block size threshold must be in (0, 1]: " + threshold);
+                    if (0 >= threshold || 100 < threshold || Double.isInfinite(threshold) || Double.isNaN(threshold)) {
+                        throw new IllegalArgumentException("Block size threshold must be in (0, 100]: " + threshold);
                     }
                 }
 
@@ -472,7 +472,8 @@ public class Crush extends Configured implements Tool {
                     int maxFileBlocksOption = Integer.parseInt(cli.getOptionValue("max-file-blocks"));
 
                     if (0 > maxFileBlocksOption) {
-                        throw new IllegalArgumentException("Maximum file size in blocks must be positive: " + maxFileBlocksOption);
+                        throw new IllegalArgumentException("Maximum file size in blocks must be positive: "
+                                + maxFileBlocksOption);
                     }
 
                     maxFileBlocks = maxFileBlocksOption;
@@ -480,6 +481,10 @@ public class Crush extends Configured implements Tool {
                     maxFileBlocks = 8;
                 }
 
+                if (threshold > maxFileBlocks) {
+                    throw new IllegalArgumentException("Block size threshold: " + threshold
+                            + "must be smaller than maxFileBlocks: " + maxFileBlocks);
+                }
                 if (cli.hasOption("regex")) {
                     regexes = asList(cli.getOptionValues("regex"));
                 }
@@ -633,7 +638,7 @@ public class Crush extends Configured implements Tool {
             job.set("mapreduce.output.fileoutputformat.compress.codec", codecClassName);
             job.set("avro.output.codec", codec);
             job.set("parquet.compression", codec);
-            job.set("orc.compress", codec);
+            job.set("orc.compress", codec.toUpperCase());
 
             try {
                 CompressionCodec instance = (CompressionCodec) Class.forName(codecClassName).newInstance();
