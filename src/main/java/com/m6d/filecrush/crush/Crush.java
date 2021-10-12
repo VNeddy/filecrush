@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat;
 import org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat;
 import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
@@ -92,6 +93,16 @@ public class Crush extends Configured implements Tool {
      * value is a file.
      */
     private Path bucketFiles;
+
+    /**
+     * The map of file and modify time
+     */
+    private Map<String, Long> mTimeMap;
+
+    /**
+     * The map of file and access time
+     */
+    private Map<String, Long> aTimeMap;
 
     /**
      * The map from directory to partition.
@@ -828,16 +839,28 @@ public class Crush extends Configured implements Tool {
 
             Reader reader = new Reader(fs, path, fs.getConf());
 
+            Map<String, String> tmpMap = new HashMap<String, String>();
+
+            boolean isUsed = false;
+
             try {
                 while (reader.next(srcFile, crushOut)) {
-                    if (!crushOut.equals(prevCrushOut)) {
-                        swap(crushInput, prevCrushOut.toString());
-
-                        prevCrushOut.set(crushOut);
-                        crushInput = new LinkedList<Path>();
+                    tmpMap.put(srcFile.toString(), crushOut.toString());
+                    // if the file has been written or read during the task
+                    String srcFilePath = srcFile.toString();
+                    FileStatus fileStatus = fs.getFileStatus(new Path(srcFilePath));
+                    long modificationTime = fileStatus.getModificationTime();
+                    long accessTime = fileStatus.getAccessTime();
+                    if (!mTimeMap.get(srcFilePath).equals(modificationTime)) {
+                        print(Verbosity.INFO, srcFilePath + " has been written during the task, skip this batch: "
+                                + crushOut + "\n");
+                        isUsed = true;
                     }
-
-                    crushInput.add(new Path(srcFile.toString()));
+                    if (!aTimeMap.get(srcFilePath).equals(accessTime)) {
+                        print(Verbosity.INFO, srcFilePath + " has been read during the task, skip this batch: "
+                                + crushOut + "\n");
+                        isUsed = true;
+                    }
                 }
             } finally {
                 try {
@@ -847,7 +870,20 @@ public class Crush extends Configured implements Tool {
                 }
             }
 
-            swap(crushInput, prevCrushOut.toString());
+            if (!isUsed) {
+                for (Map.Entry<String, String> entry : tmpMap.entrySet()) {
+                    if (!entry.getValue().equals(prevCrushOut.toString())) {
+                        swap(crushInput, prevCrushOut.toString());
+
+                        prevCrushOut.set(entry.getValue());
+                        crushInput = new LinkedList<Path>();
+                    }
+
+                    crushInput.add(new Path(entry.getKey()));
+                }
+
+                swap(crushInput, prevCrushOut.toString());
+            }
         }
 
         /*
@@ -1088,6 +1124,8 @@ public class Crush extends Configured implements Tool {
 
         Path tmpIn = new Path(tmpDir, "in");
 
+        mTimeMap = new HashMap<String, Long>();
+        aTimeMap = new HashMap<String, Long>();
         bucketFiles = new Path(tmpIn, "dirs");
         partitionMap = new Path(tmpIn, "partition-map");
         counters = new Path(tmpIn, "counters");
@@ -1151,11 +1189,23 @@ public class Crush extends Configured implements Tool {
                         for (FileStatus content : contents) {
                             Path path = content.getPath();
 
+                            mTimeMap.put(path.toUri().getPath(), content.getModificationTime());
+                            aTimeMap.put(path.toUri().getPath(), content.getAccessTime());
+
                             if (content.isDir()) {
                                 nextLevel.add(path);
                             } else {
                                 String filePath = path.toUri().getPath();
                                 boolean skipFile = false;
+
+                                // if file is opening, skip all directory
+                                if (!((DistributedFileSystem) fs).isFileClosed(path)) {
+                                    skipFile = true;
+                                }
+                                // if file has been read within 30 minutes
+                                if (currentTimeMillis() - content.getAccessTime() < 18) {
+                                    skipFile = true;
+                                }
                                 if (skippedFilesMatcher != null) {
                                     skippedFilesMatcher.reset(filePath);
                                     if (skippedFilesMatcher.matches()) {
