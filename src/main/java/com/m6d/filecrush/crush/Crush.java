@@ -1203,7 +1203,7 @@ public class Crush extends Configured implements Tool {
                                     skipFile = true;
                                 }
                                 // if file has been read within 30 minutes
-                                if (currentTimeMillis() - content.getAccessTime() < 18) {
+                                if (currentTimeMillis() - content.getAccessTime() < 1800000) {
                                     skipFile = true;
                                 }
                                 if (skippedFilesMatcher != null) {
