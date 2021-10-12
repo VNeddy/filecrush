@@ -856,11 +856,11 @@ public class Crush extends Configured implements Tool {
                                 + crushOut + "\n");
                         isUsed = true;
                     }
-                    if (!aTimeMap.get(srcFilePath).equals(accessTime)) {
-                        print(Verbosity.INFO, srcFilePath + " has been read during the task, skip this batch: "
-                                + crushOut + "\n");
-                        isUsed = true;
-                    }
+//                    if (!aTimeMap.get(srcFilePath).equals(accessTime)) {
+//                        print(Verbosity.INFO, srcFilePath + " has been read during the task, skip this batch: "
+//                                + crushOut + "\n");
+//                        isUsed = true;
+//                    }
                 }
             } finally {
                 try {
